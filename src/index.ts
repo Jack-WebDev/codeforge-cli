@@ -43,6 +43,18 @@ ${chalk.cyan("Example:")}
   process.exit(0);
 }
 
+// ===== Detect CLI-invoked Package Manager =====
+function detectInvokedPackageManager(): string | null {
+  const userAgent = process.env.npm_config_user_agent;
+  if (!userAgent) return null;
+
+  if (userAgent.startsWith("yarn")) return "yarn";
+  if (userAgent.startsWith("pnpm")) return "pnpm";
+  if (userAgent.startsWith("npm")) return "npm";
+
+  return null;
+}
+
 // ===== Detect Installed Package Managers =====
 async function detectPackageManagers(): Promise<string[]> {
   const packageManagers = ["pnpm", "yarn", "npm"];
@@ -121,35 +133,29 @@ async function run() {
     }
   }
 
-  const availablePMs = await detectPackageManagers();
-  if (availablePMs.length === 0) {
-    console.error(
-      chalk.red(
-        "❌ No package managers detected. Please install npm, yarn, or pnpm."
-      )
-    );
-    process.exit(1);
-  }
+  let packageManager = detectInvokedPackageManager();
+  if (!packageManager) {
+    const availablePMs = await detectPackageManagers();
 
-  let packageManager: string;
+    if (availablePMs.length === 0) {
+      console.error(
+        chalk.red(
+          "❌ No package managers detected. Please install npm, yarn, or pnpm."
+        )
+      );
+      process.exit(1);
+    }
 
-  if (availablePMs.length === 1) {
     packageManager = availablePMs[0]!;
     console.log(
       chalk.yellow(
-        `🧠 Only "${packageManager}" detected. Using it automatically.`
+        `🧠 No active package manager detected. Defaulting to "${packageManager}".`
       )
     );
   } else {
-    const response = await inquirer.prompt([
-      {
-        name: "packageManager",
-        type: "list",
-        message: chalk.cyan("Choose a package manager (detected):"),
-        choices: availablePMs,
-      },
-    ]);
-    packageManager = response.packageManager;
+    console.log(
+      chalk.yellow(`🧠 Detected package manager: "${packageManager}"`)
+    );
   }
 
   // ===== Cleanup: Remove pnpm-specific files if not using pnpm =====
@@ -162,9 +168,7 @@ async function run() {
       if (existsSync(file)) {
         rmSync(file);
         console.log(
-          chalk.yellow(
-            `🧹 Removed ${file} for compatibility with ${packageManager}.`
-          )
+          chalk.yellow(`🧹 Clean up for compatibility with ${packageManager}.`)
         );
       }
     }
@@ -173,7 +177,7 @@ async function run() {
     for (const dir of dirsToRemove) {
       if (existsSync(dir)) {
         rmSync(dir, { recursive: true, force: true });
-        console.log(chalk.yellow(`🧹 Removed ${dir}/ directory.`));
+        console.log(chalk.yellow(`🧹 Clean up folders.`));
       }
     }
 
@@ -185,9 +189,7 @@ async function run() {
       if (pkgJson.packageManager) {
         delete pkgJson.packageManager;
         await fs.writeFile(pkgPath, JSON.stringify(pkgJson, null, 2));
-        console.log(
-          chalk.yellow(`🧹 Removed "packageManager" field from package.json.`)
-        );
+        console.log(chalk.yellow(`🧹 Update package.json.`));
       }
     } catch (err) {
       console.error(chalk.red("❌ Failed to update package.json."), err);
