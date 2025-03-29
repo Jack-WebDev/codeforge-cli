@@ -3,7 +3,7 @@ import degit from "degit";
 import { existsSync, rmSync } from "fs";
 import { join } from "path";
 import which from "which";
-import { spawnSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import chalk from "chalk";
 import boxen from "boxen";
 import ora from "ora";
@@ -181,16 +181,33 @@ async function run() {
       }
     }
 
-    // ===== Remove packageManager field from package.json =====
+    // ===== Update packageManager field and optionally add workspaces =====
     const pkgPath = join(process.cwd(), "package.json");
     try {
       const pkgRaw = await fs.readFile(pkgPath, "utf-8");
       const pkgJson = JSON.parse(pkgRaw);
-      if (pkgJson.packageManager) {
-        delete pkgJson.packageManager;
-        await fs.writeFile(pkgPath, JSON.stringify(pkgJson, null, 2));
-        console.log(chalk.yellow(`🧹 Update package.json.`));
+
+      // Update packageManager field
+      switch (packageManager) {
+        case "npm": {
+          const version = await execSync("npm -v").toString().trim();
+          pkgJson.packageManager = `npm@${version}`;
+          break;
+        }
+        case "yarn":
+          pkgJson.packageManager = "yarn@1.22.19";
+          break;
       }
+
+      // Add workspaces for npm or yarn
+      if (packageManager === "npm" || packageManager === "yarn") {
+        pkgJson.workspaces = ["apps/*", "packages/*"];
+      }
+
+      await fs.writeFile(pkgPath, JSON.stringify(pkgJson, null, 2));
+      console.log(
+        chalk.yellow(`🧹 Updated package.json with ${packageManager}.`)
+      );
     } catch (err) {
       console.error(chalk.red("❌ Failed to update package.json."), err);
     }
